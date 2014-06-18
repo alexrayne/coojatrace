@@ -27,7 +27,7 @@ package de.fau.cooja.plugins.coojatrace
 
 
 
-import se.sics.cooja._
+import org.contikios.cooja._
 
 import java.util.{List => _, _}
 import java.io._
@@ -65,7 +65,7 @@ import scala.actors.Futures._
  */
 @ClassDescription("CoojaTrace")
 @PluginType(PluginType.SIM_PLUGIN) // comment out this line to prevent scaladoc bug
-class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("CoojaTrace", gui, false) {
+class CoojaTracePlugin(val sim: Simulation, val gui: Cooja) extends VisPlugin("CoojaTrace", gui, false) {
   /**
    * Logger for our plugin.
    */
@@ -121,7 +121,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
   
   // Constructor:
   // create Swing elements if run with GUI
-  if(GUI.isVisualized) createGUI()
+  if(Cooja.isVisualized) createGUI()
   // prepare interpreter
   prepareInterpreter()
   
@@ -140,7 +140,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
     add(new JScrollPane(editorPane))
     setSize(600, 600)
     setDefaultCloseOperation(javax.swing.WindowConstants.HIDE_ON_CLOSE)
-    sim.getGUI.getDesktopPane.add(this)
+    sim.getCooja.getDesktopPane.add(this)
   }
 
   /**
@@ -214,12 +214,12 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
       val s2 = "Ignore"
       val options = Array[Object](s1, s2)
       val n = JOptionPane.showOptionDialog(
-                GUI.getTopParentContainer(),
+                Cooja.getTopParentContainer(),
                 "The CoojaTrace plugin was loaded after other plugins. This can lead to classloader inconsistencies.\nDo you want to reload the simulation to fix this?",
                 "Reload simulation?", JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE, null, options, s1);
       if (n == JOptionPane.YES_OPTION) {
-        sim.getGUI.reloadCurrentSimulation(false)
+        sim.getCooja.reloadCurrentSimulation(false)
       }
     }
   }
@@ -251,12 +251,12 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
     
     // external classes not loaded by plugins
     val classes = scala.List(
-      "org.apache.log4j.Logger", "org.jdom.Element", "se.sics.cooja.GUI"
+      "org.apache.log4j.Logger", "org.jdom.Element", "org.contikios.cooja.Cooja"
     )
     
     // assemble JAR path
     val coojaLibs = classes.map(jarPathOfClass)
-    val classloader = sim.getGUI.projectDirClassLoader.asInstanceOf[java.net.URLClassLoader]
+    val classloader = sim.getCooja.projectDirClassLoader.asInstanceOf[java.net.URLClassLoader]
     val dynamicLibs = classloader.getURLs.map(_.toString.replace("file:", "")).toList
     val classPath = coojaLibs ::: (dynamicLibs.filter(! _.endsWith("scala-compiler.jar")))
     settings.bootclasspath.value = classPath.mkString(":")
@@ -279,7 +279,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
     val imp = interpreter.inter.addImports(
       "reactive._",
 
-      "se.sics.cooja._",
+      "org.contikios.cooja._",
       "interfaces._",
 
       "de.fau.cooja.plugins.coojatrace._",
@@ -296,7 +296,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
       
     // load and register contikimote wrappers if available
     try {
-      Class.forName("se.sics.cooja.contikimote.ContikiMote", false, sim.getGUI.projectDirClassLoader)
+      Class.forName("org.contikios.cooja.contikimote.ContikiMote", false, sim.getCooja.projectDirClassLoader)
 
       val cMote = interpreter.inter.interpret("""
         import contikiwrappers._
@@ -312,7 +312,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
 
     // load and register mspmote wrappers if available
     try {
-      Class.forName("se.sics.cooja.mspmote.MspMote", false, sim.getGUI.projectDirClassLoader)
+      Class.forName("org.contikios.cooja.mspmote.MspMote", false, sim.getCooja.projectDirClassLoader)
 
       val mspMote = interpreter.inter.interpret("""
         import mspwrappers._
@@ -333,7 +333,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
    * Creates an new Future to interpreter_prepared 
    */
   def prepareInterpreter(){
-    GUI.setProgressMessage("Initializing Scala interpreter"); 
+    Cooja.setProgressMessage("Initializing Scala interpreter");
     logger.info("Preparing interpreter")
     interpreter_prepared = future {
 	    val interpreter = createInterpreter()
@@ -358,13 +358,13 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
       interpreter.pw.flush()
       val msg = interpreter.ew.toString
       logger.error(out + "\n" + msg)
-      if(GUI.isVisualized) {
+      if(Cooja.isVisualized) {
         val e = new Exception("Scala compilation error") {
           override def printStackTrace(stream: PrintStream) {
             stream.print(msg)
           }
         }
-        GUI.showErrorDialog(this, "Scala compilation error", e, false)
+        Cooja.showErrorDialog(this, "Scala compilation error", e, false)
         deactivate()
       }
     }
@@ -375,7 +375,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
     }
     
     val startTime = System.currentTimeMillis()
-    GUI.setProgressMessage("Compiling Scala"); 
+    Cooja.setProgressMessage("Compiling Scala");
     //Get future
     interpreter = interpreter_prepared.apply()
     interpreter_prepared = null
@@ -423,7 +423,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
 	      // incomplete, show warning dialog
 	      logger.error("Script incomplete!")
 	
-	      if(GUI.isVisualized) JOptionPane.showMessageDialog(GUI.getTopParentContainer,
+	      if(Cooja.isVisualized) JOptionPane.showMessageDialog(Cooja.getTopParentContainer,
 	        "The test script is incomplete.\n\n" +
 	        "This is most likely caused by an unmatched open (, [ or \"",
 	        "Script incomplete", JOptionPane.WARNING_MESSAGE)
@@ -435,7 +435,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
 	    }
     }
     //Only prepare a new interpreter if everything is visualized
-    if(GUI.isVisualized) {
+    if(Cooja.isVisualized) {
     	prepareInterpreter()
     }
     
@@ -494,10 +494,10 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
 
     // check if script runner plugin would be initialized before this
     val startedPlugins = gui.getStartedPlugins
-    val scriptRunner = gui.getPlugin("se.sics.cooja.plugins.ScriptRunner")
+    val scriptRunner = gui.getPlugin("org.contikios.cooja.plugins.ScriptRunner")
     if((scriptRunner != null) && (startedPlugins.indexOf(this) > startedPlugins.indexOf(scriptRunner))) {
       logger.warn("CoojaTrace plugin will be initialized after the cooja test (script runner) plugin!")
-      JOptionPane.showMessageDialog(GUI.getTopParentContainer,
+      JOptionPane.showMessageDialog(Cooja.getTopParentContainer,
         "The CoojaTrace plugin will be initialized after the cooja test (script runner) plugin.\n\n" +
         "Running this simulation without GUI will start the simulation before the CoojaTrace plugin is initalized.\n" +
         "To fix this, close the cooja test (script runner) plugin, open it again and resave the simulation.\n" +
@@ -527,7 +527,7 @@ class CoojaTracePlugin(val sim: Simulation, val gui: GUI) extends VisPlugin("Coo
     }
 
     // auto-activate when run without GUI
-    if(!GUI.isVisualized && active == false) {
+    if(!Cooja.isVisualized && active == false) {
       activate()
     }
 
@@ -554,5 +554,5 @@ object CoojaTracePlugin {
    * @return instance of CoojaTracePlugin in sim
    */
   def forSim(sim: Simulation): CoojaTracePlugin =
-    sim.getGUI.getPlugin("CoojaTracePlugin").asInstanceOf[CoojaTracePlugin] 
+    sim.getCooja.getPlugin("CoojaTracePlugin").asInstanceOf[CoojaTracePlugin]
 }
